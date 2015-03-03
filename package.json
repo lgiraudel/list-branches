@@ -1,0 +1,24 @@
+{
+  "name": "list-branches",
+  "version": "1.0.0",
+  "description": "",
+  "main": "list-branches.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lgiraudel/list-branches.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lgiraudel/list-branches/issues"
+  },
+  "homepage": "https://github.com/lgiraudel/list-branches",
+  "dependencies": {
+    "commander": "^2.6.0",
+    "git-wrapper": "^0.1.1",
+    "promise": "^6.1.0"
+  }
+}
