@@ -1,92 +1,112 @@
-var program = require('commander');
-var Git = require('git-wrapper');
-var Promise = require('promise');
+#!/usr/bin/env node
 
-program.version('0.0.1')
+var program  = require('commander');
+var exec     = require('child_process').exec;
+var fs       = require('fs');
+var util     = require('util');
+var execSync = require('child_process').execSync;
+var ProgressBar = require('progress');
+
+program
+    .version('0.0.1')
+    .usage('[options] <directory>')
 	.option('-q, --quiet', 'Doesn\'t display details for each branch')
 	.option('-a, --age <n>', 'Displays or deletes branches which have not any commit since [n] days', parseInt)
 	.option('-t, --total', 'Displays the total of branches')
 	.option('-u, --user <user>', 'Filter on a specific user')
 	.option('--merged', 'Loop on merged branches only')
 	.option('--nomerged', 'Loop on not-merged branches only')
-	.option('--force-delete', 'Force delete of the branches')
+	.option('--delete', 'Delete the branches')
 	.parse(process.argv);
 
-var quiet = typeof program.quiet !== 'undefined';
-var merged = typeof program['merged'] !== 'undefined' ? 'gatekeeper/stable' : false;
-var nomerged = typeof program['nomerged'] !== 'undefined' ? 'gatekeeper/stable' : false;
+if (program.delete) {
+  program.quiet = true;
+  program.total = false;
+}
 
-var git = new Git({
-  'git-dir': '/home/sites/sfPortal/.git'
-});
+var cwd = process.cwd();
+if (program.args.length !== 0) {
+  try  {
+    fs.lstatSync(program.args[0] + '/.git');
+  } catch (e) {
+    console.log(util.format("'%s' is not a valid git project directory", program.args[0]));
+    process.exit(0);
+  }
 
+  cwd = program.args[0];
+}
 
-var options = {
-  'r': true,
-  'merged': merged,
-  'no-merged': nomerged
-};
-console.log(options);
+var command = 'git branch -r';
+if (program.merged) {
+  command += ' --merged gatekeeper/stable';
+} else {
+  if (program.nomerged) {
+    command += ' --no-merged gatekeeper/stable';
+  }
+}
 
-var total = 0;
-git.exec('branch', options, [], function(err, msg) {
+exec(command, {cwd: cwd, encoding: 'utf8'}, function(err, stdout) {
   if (err) throw err;
 
-  var branches = msg.split('\n');
-  var promises = [];
-  branches.forEach(function(branch) {
+  var branchDaysMapping = {};
+
+  var branches = stdout.split("\n").filter(function(branch, index, branches) {
     branch = branch.trim();
-    if (branch.indexOf('gatekeeper/merge-requests') === -1) {
-      return;
+
+    var filter = 'gatekeeper/merge-requests/';
+    if (program.user) {
+      filter += program.user;
     }
 
-    if (typeof program.user !== 'undefined' && branch.indexOf('gatekeeper/merge-requests/' + program.user) === -1) {
-      return;
+    if (branch.indexOf(filter) === -1) {
+      return false;
     }
 
-    if (typeof program.age !== 'undefined') {
-      promises.push(isBranchTooOld(branch, program.age, quiet));
-    } else {
-      promises.push(Promise.resolve(true));
+    var nbDays = getNbDaysSinceLastCommitOfBranch(branch, cwd);
+    if (program.age && nbDays < program.age) {
+      return false;
     }
+
+    branchDaysMapping[branch] = nbDays;
+
+    return true;
   });
 
-  if (typeof program.total !== 'undefined') {
-    showTotal(promises, program.age, merged, nomerged);
+  if (!program.quiet) {
+    branches.forEach(function(branch) {
+      branch = branch.trim();
+      console.log(util.format('Last commit on %s: %d days ago', branch, branchDaysMapping[branch]));
+    });
+  }
+
+  if (program.delete) {
+    var bar = new ProgressBar('deleting [:bar] :percent (:total branches)', { total: branches.length });
+    branches.forEach(function(branch) {
+
+      var i = 0;
+      while (i++ < 5000000) {}
+      bar.tick();
+    });
+
+  } else {
+    showTotal(branches.length);
   }
 });
 
-function isBranchTooOld(branch, age, quiet) {
-  return new Promise(function(fulfill, reject) {
-      git.exec('log', {'1': true, pretty: 'format:"%cd"', date: 'iso'}, [branch], function(err, msg) {
-        if (err) return reject(err);
+function getNbDaysSinceLastCommitOfBranch(branch, cwd) {
+  var date = execSync('git log -1 --pretty=format:"%cd" --date=iso ' + branch, {cwd: cwd, encoding: 'utf8'});
+  date = new Date(date);
+  var nbDays = Math.floor((new Date() - date) / (3600 * 24 * 1000));
 
-        var days = Math.round((new Date() - new Date(msg))/(24 * 3600 * 1000));
-
-        if (days < age) {
-          return fulfill(false);
-        }
-
-        if (!quiet) {
-          console.log('Last commit on ' + branch + ' : ' + days + ' days ago');
-        }
-        return fulfill(true);
-      });
-  });
+  return nbDays;
 }
 
-function showTotal(promises, age, merged, nomerged) {
-  Promise.all(promises).then(function(res) {
-    var total = res.filter(function(item) {
-      return item;
-    }).length;
-
-    var type = '';
-
-    if (typeof age !== 'undefined') {
-      console.log(total + type + ' branches with a last commit older than ' + age + ' days');
+function showTotal(total) {
+  if (program.total) {
+    if (program.merged || program.nomerged) {
+      console.log(util.format('Total: %d %s branches', total, program.merged ? 'merged' : 'not merged'));
     } else {
-      console.log(total + type + ' branches');
+      console.log(util.format('Total: %d branches', total));
     }
-  });
+  }
 }
