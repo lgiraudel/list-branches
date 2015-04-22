@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-var program  = require('commander');
-var exec     = require('child_process').exec;
-var fs       = require('fs');
-var util     = require('util');
-var execSync = require('child_process').execSync;
+var program     = require('commander');
+var exec        = require('child_process').exec;
+var fs          = require('fs');
+var util        = require('util');
+var execSync    = require('child_process').execSync;
 var ProgressBar = require('progress');
+var sleep       = require('sleep');
 
 program
     .version('0.0.1')
@@ -83,8 +84,8 @@ exec(command, {cwd: cwd, encoding: 'utf8'}, function(err, stdout) {
     var bar = new ProgressBar('deleting [:bar] :percent (:total branches)', { total: branches.length });
     branches.forEach(function(branch) {
 
-      var i = 0;
-      while (i++ < 5000000) {}
+      sleep.sleep(1);
+      
       bar.tick();
     });
 
